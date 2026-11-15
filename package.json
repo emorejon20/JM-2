@@ -1,6 +1,6 @@
 {
   "name": "jm-2",
-  "module": "src/main.ts",
+  "module": "src/index.ts",
   "type": "module",
   "private": true,
   "scripts": {
