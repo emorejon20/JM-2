@@ -1,11 +1,22 @@
 import compression from 'compression';
 import express, { type Express, type Request, type Response } from 'express';
 import helmet from 'helmet';
+import pino from 'pino';
+import pinoHttp from 'pino-http';
 
-const app: Express = express();
+const port = 8080;
+
+const logger = pino();
+
+const app = express();
 
 app.use(compression());
 app.use(helmet());
+app.use(
+    pinoHttp({
+        logger: logger,
+    }),
+);
 
 interface User {
     name: string;
@@ -55,4 +66,5 @@ app.delete('/user/:id', (req: Request, res: Response) => {
     }
 });
 
-app.listen(8080);
+logger.info(`Listening at localhost:${port}...`);
+app.listen(port);
