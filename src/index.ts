@@ -1,10 +1,13 @@
+import assert from 'assert'
+
 import compression from 'compression';
 import express, { type Express, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import pino from 'pino';
 import pinoHttp from 'pino-http';
 
-const port = 8080;
+assert(process.env.PORT !== undefined);
+const port = parseInt(process.env.PORT);
 
 const logger = pino();
 
@@ -134,7 +137,8 @@ app.route('/user/:username')
         }
     })
     .delete(async (req: Request, res: Response) => {
-        const username = req.params.id as string;
+        const username = req.params.username as string;
+        console.log(username);
         if (database.users.has(username)) {
             database.users.delete(username);
             res.sendStatus(200);
