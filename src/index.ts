@@ -1,9 +1,10 @@
-import assert from 'assert'
+import assert from 'assert';
 
 import compression from 'compression';
 import express, { type Express, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import pino from 'pino';
+import { validate } from '@hyperjump/json-schema/draft-2020-12';
 import pinoHttp from 'pino-http';
 
 assert(process.env.PORT !== undefined);
@@ -24,6 +25,7 @@ app.use(
 );
 
 interface User {
+    username: string;
     name: string;
 }
 
@@ -35,45 +37,54 @@ const database: Database = {
     users: new Map(),
 };
 
+const validateUser = await validate('./static/schemas/user.schema.json');
+
+app.use(express.static('./static'));
+
 app.route('/user')
     .options(async (req: Request, res: Response) => {
-        res.setHeader('Allow', 'POST').sendStatus(200);
+        res.setHeader('Allow', ['GET', 'POST']).sendStatus(200);
+    })
+    .get(async (req: Request, res: Response) => {
+        res.json(database.users.values().toArray());
     })
     .post(async (req: Request, res: Response) => {
         if (req.body !== undefined) {
-            const userUsername = req.body.username;
-            const userName = req.body.name;
-            if (
-                userUsername === undefined ||
-                typeof userUsername !== 'string' ||
-                userName === undefined ||
-                typeof userName !== 'string'
-            ) {
+            const bodyValidation = validateUser(req.body);
+            if (!bodyValidation.valid) {
                 res.sendStatus(422);
-            } else if (database.users.has(userUsername)) {
+            } else if (database.users.has(req.body.username as string)) {
                 res.sendStatus(409);
             } else {
-                database.users.set(userUsername, {
-                    name: userName,
+                database.users.set(req.body.username as string, {
+                    username: req.body.username as string,
+                    name: req.body.name as string,
                 });
-                res.location(`/user/${userUsername}`).sendStatus(303);
+                res.location(`/user/${req.body.username as string}`).sendStatus(
+                    303,
+                );
             }
         } else {
             res.sendStatus(400);
         }
+    })
+    .all(async (req: Request, res: Response) => {
+        res.sendStatus(405);
     });
 
 app.route('/user/:username')
     .options(async (req: Request, res: Response) => {
-        res.setHeader('Allow', ['GET', 'PUT', 'PATCH', 'DELETE']).sendStatus(
-            200,
-        );
+        res.setHeader('Allow', [
+            'GET',
+            'PUT',
+            /* 'PATCH', */ 'DELETE',
+        ]).sendStatus(200);
     })
     .get(async (req: Request, res: Response) => {
         const username = req.params.username as string;
         if (database.users.has(username)) {
             const user = database.users.get(username)!;
-            res.send(`User{ username = ${username}, name = ${user.name} }`);
+            res.json(user);
         } else {
             res.sendStatus(404);
         }
@@ -81,31 +92,28 @@ app.route('/user/:username')
     .put(async (req: Request, res: Response) => {
         const username = req.params.username as string;
         if (req.body !== undefined) {
-            const newUsername = req.body.username;
-            const newName = req.body.name;
-            if (
-                newUsername === undefined ||
-                typeof newUsername === 'string' ||
-                newName === undefined ||
-                typeof newName !== 'string'
-            ) {
-                res.sendStatus(422);
-            } else if (!database.users.has(username)) {
+            const bodyValidation = validateUser(req.body);
+            if (!database.users.has(username)) {
                 res.sendStatus(404);
-            } else if (database.users.has(newUsername)) {
+            } else if (!bodyValidation.valid) {
+                res.sendStatus(422);
+            } else if (database.users.has(req.body.username as string)) {
                 res.sendStatus(409);
             } else {
                 database.users.delete(username);
-                database.users.set(newUsername, {
-                    name: newName,
+                database.users.set(req.body.username as string, {
+                    username: req.body.username as string,
+                    name: req.body.name as string,
                 });
-                res.location(`/user/${newUsername}`).sendStatus(303);
+                res.location(`/user/${req.body.username as string}`).sendStatus(
+                    303,
+                );
             }
         } else {
             res.sendStatus(400);
         }
     })
-    .patch(async (req: Request, res: Response) => {
+    /*.patch(async (req: Request, res: Response) => {
         const username = req.params.username as string;
         if (req.body !== undefined) {
             if (!database.users.has(username)) {
@@ -135,7 +143,7 @@ app.route('/user/:username')
         } else {
             res.sendStatus(400);
         }
-    })
+    })*/
     .delete(async (req: Request, res: Response) => {
         const username = req.params.username as string;
         console.log(username);
@@ -145,7 +153,14 @@ app.route('/user/:username')
         } else {
             res.sendStatus(404);
         }
+    })
+    .all(async (req: Request, res: Response) => {
+        res.sendStatus(405);
     });
+
+app.use(async (req: Request, res: Response) => {
+    res.sendStatus(404);
+});
 
 logger.info(`Listening at localhost:${port}...`);
 app.listen(port);
