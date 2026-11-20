@@ -7,6 +7,8 @@ import pino from 'pino';
 import { validate } from '@hyperjump/json-schema/draft-2020-12';
 import pinoHttp from 'pino-http';
 
+import db from './db.ts';
+
 assert(process.env.PORT !== undefined);
 const port = parseInt(process.env.PORT);
 
@@ -29,14 +31,6 @@ interface User {
     name: string;
 }
 
-interface Database {
-    users: Map<string, User>;
-}
-
-const database: Database = {
-    users: new Map(),
-};
-
 const validateUser = await validate('./static/schemas/user.schema.json');
 
 app.use(express.static('./static'));
@@ -46,27 +40,32 @@ app.route('/user')
         res.setHeader('Allow', ['GET', 'POST']).sendStatus(200);
     })
     .get(async (req: Request, res: Response) => {
-        res.json(database.users.values().toArray());
+        const query = await db`SELECT * FROM "user";`;
+        res.json(query);
     })
     .post(async (req: Request, res: Response) => {
         if (req.body !== undefined) {
             const bodyValidation = validateUser(req.body);
             if (!bodyValidation.valid) {
                 res.sendStatus(422);
-            } else if (database.users.has(req.body.username as string)) {
-                res.sendStatus(409);
-            } else {
-                database.users.set(req.body.username as string, {
-                    username: req.body.username as string,
-                    name: req.body.name as string,
-                });
-                res.location(`/user/${req.body.username as string}`).sendStatus(
-                    303,
-                );
+                return;
             }
-        } else {
-            res.sendStatus(400);
+            const username = req.body.username as string;
+            var query =
+                await db`SELECT * FROM "user" WHERE username = ${username};`;
+            if (query.count > 0) {
+                res.sendStatus(409);
+                return;
+            }
+            const name = req.body.name as string;
+            await db`INSERT INTO "user" VALUES (
+                ${username},
+                ${name}
+            );`;
+            res.location(`/user/${username}`).sendStatus(303);
+            return;
         }
+        res.sendStatus(400);
     })
     .all(async (req: Request, res: Response) => {
         res.sendStatus(405);
@@ -82,73 +81,58 @@ app.route('/user/:username')
     })
     .get(async (req: Request, res: Response) => {
         const username = req.params.username as string;
-        if (database.users.has(username)) {
-            const user = database.users.get(username)!;
-            res.json(user);
-        } else {
-            res.sendStatus(404);
+        var query =
+            await db`SELECT * FROM "user" WHERE username = ${username};`;
+        if (query.count > 0) {
+            res.json(query[0]);
+            return;
         }
+        res.sendStatus(404);
     })
     .put(async (req: Request, res: Response) => {
         const username = req.params.username as string;
         if (req.body !== undefined) {
             const bodyValidation = validateUser(req.body);
-            if (!database.users.has(username)) {
+            const newUsername = req.body.username as string;
+            const newName = req.body.name as string;
+            var query =
+                await db`SELECT * FROM "user" WHERE username = ${username};`;
+            if (query.count == 0) {
                 res.sendStatus(404);
-            } else if (!bodyValidation.valid) {
+                return;
+            }
+            if (!bodyValidation.valid) {
                 res.sendStatus(422);
-            } else if (database.users.has(req.body.username as string)) {
-                res.sendStatus(409);
-            } else {
-                database.users.delete(username);
-                database.users.set(req.body.username as string, {
-                    username: req.body.username as string,
-                    name: req.body.name as string,
-                });
-                res.location(`/user/${req.body.username as string}`).sendStatus(
-                    303,
-                );
+                return;
             }
-        } else {
-            res.sendStatus(400);
-        }
-    })
-    /*.patch(async (req: Request, res: Response) => {
-        const username = req.params.username as string;
-        if (req.body !== undefined) {
-            if (!database.users.has(username)) {
-                res.sendStatus(404);
-            } else {
-                var newUsername = req.body.username;
-                var newName = req.body.name;
-                if (
-                    newUsername !== undefined &&
-                    typeof newUsername === 'string'
-                ) {
-                    if (database.users.has(newUsername)) {
-                        res.sendStatus(409);
-                    }
-                } else {
-                    newUsername = username;
+            if (username != newUsername) {
+                query =
+                    await db`SELECT * FROM "user" WHERE username = ${newUsername};`;
+                if (query.count > 0) {
+                    res.sendStatus(409);
+                    return;
                 }
-                if (newName === undefined || typeof newName !== 'string') {
-                    newName = database.users.get(username)!.name;
-                }
-                database.users.delete(username);
-                database.users.set(newUsername, {
-                    name: newName,
-                });
+                await db`DELETE FROM "user" WHERE username = ${username};`;
+                await db`INSERT INTO "user" VALUES (
+                    ${newUsername},
+                    ${newName}
+                );`;
                 res.location(`/user/${newUsername}`).sendStatus(303);
+                return;
             }
-        } else {
-            res.sendStatus(400);
+            await db`UPDATE "user" SET name = ${newName} WHERE username = ${username}`;
+            res.location(`/user/${req.body.username as string}`).sendStatus(
+                303,
+            );
+            return;
         }
-    })*/
+        res.sendStatus(400);
+    })
     .delete(async (req: Request, res: Response) => {
         const username = req.params.username as string;
-        console.log(username);
-        if (database.users.has(username)) {
-            database.users.delete(username);
+        const query =
+            await db`DELETE FROM "user" WHERE username = ${username};`;
+        if (query.count > 0) {
             res.sendStatus(200);
         } else {
             res.sendStatus(404);
