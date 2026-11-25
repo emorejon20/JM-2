@@ -1,18 +1,22 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "/schemas/user_patch.json",
+    "$id": "/schemas/user.schema.json",
     "title": "User",
     "description": "A registered user.",
     "type": "object",
     "properties": {
-        "username": {
+        "handle": {
             "description": "The handle of the user.",
             "type": "string"
         },
         "name": {
             "description": "The name of the user.",
             "type": "string"
+        },
+        "createdAt": {
+            "description": "The timestamp of the user's creation.",
+            "type": "string"
         }
     },
-    "required": ["username", "name"]
+    "required": ["handle", "name"]
 }
