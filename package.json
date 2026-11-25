@@ -5,7 +5,7 @@
     "private": true,
     "scripts": {
         "typecheck": "bun check",
-        "dev": "bun run ./src/index.ts | bun x pino-pretty"
+        "dev": "bun --watch --check ./src/index.ts | bun x pino-pretty"
     },
     "dependencies": {
         "@hyperjump/json-schema": "^1.18.1",
