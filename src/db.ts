@@ -1,8 +1,7 @@
-import assert from 'assert';
-
 import postgres from 'postgres';
 
-assert(process.env.POSTGRESQL_CONNECTION_URI !== undefined);
-const db = postgres(process.env.POSTGRESQL_CONNECTION_URI);
+import { db_connection_url } from './env';
+
+const db = postgres(db_connection_url);
 
 export default db;
